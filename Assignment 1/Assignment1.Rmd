@@ -1,0 +1,121 @@
+---
+title: "Assignment 1"
+author: "Gabriela Serrano Echenagucia"
+date: "2022 February 9"
+output: html_notebook
+---
+&nbsp;
+<center> <h1><b>Linear Regression</b></h1> </center>
+
+```{r}
+# Load the dataset "parkinsons_updrs"
+Parkinsons = read.csv("~/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Univ Miami/6th Semester - SPRING 2022/CSC 597/Assignments/Datasets/Regression/parkinsons_updrs.data")
+```
+
+## 1. Use the appropriate functions to obtain descriptive information about the variables included in the dataset (paste or include a screenshot with the resulting information)
+
+```{r}
+# Displays names of the variables
+names(Parkinsons) 
+# Displays dimension of the dataframe
+dim(Parkinsons) 
+# Descriptive information about the variables included in the dataset
+summary(Parkinsons)
+```
+
+## 2. Calculate the correlation between the different attributes (include the figure produced by R in your answer)
+
+```{r}
+# Correlation
+correlation = cor(Parkinsons)
+correlation
+```
+
+```{r}
+# Create figure
+pdf("Correlation-Figure.pdf")
+pairs(correlation)
+dev.off()
+```
+
+
+
+## 3. Divide the input dataset into training and testing
+
+### a. Split the datasets using 80% for training and 20% for testing
+```{r}
+dt = sort(sample(nrow(Parkinsons), nrow(Parkinsons)*.8))
+train = Parkinsons[dt,] # 4700 obs out of 5875 (or 80 %)
+test = Parkinsons[-dt,] # 1175 obs out of 5875 (or 20 %)
+
+# Training
+train
+# Testing
+test
+```
+
+### b. How many examples will be used for training and how many for testing?
+For training 4700 examples out of 5875 and for testing 1175 examples out of 5875
+
+## 4. Build a multiple linear regression model containing all the input variables to predict total_UPDRS
+```{r}
+# Multiple linear regression model
+model = lm(total_UPDRS ~.-motor_UPDRS-total_UPDRS, data = train)
+summary(model)
+```
+  
+### a. Which predictors have a significant impact in the prediction?
+Subject#, age, sex, test_time, Jitter.Abs., NHR , HNR, DFA and PPE seem like they have a significant impact in the prediction because they all have low p-values. A low p-value (significant) is likely to be a meaningful addition to the model because changes in the predictor's value are related to changes in the response variable. A larger (insignificant) p-value suggests that changes in the predictor are not associated with changes in the response.
+  
+### b. How does the model perform? Provide the R2 and RSE
+We can see that R-Squared is low, which means that the model does not explain very well the variation in the response variable around its mean. On the other hand, we used the RSE (gives a measure of error of prediction) to calculate the error rate of the model by dividing it by the mean of the outcome variable (total_UPDRS). The error rate is somewhat high (almost 32%) and ideally for the model to perform well, the lower the error rate is, the better.
+```{r}
+#R^2 (how well the regression model fits the observed data)
+summary(model)$r.sq 
+
+#RSE (average deviation between the actual outcome and the true regression line)
+summary(model)$sigma 
+
+# Error rate (estimated by dividing the RSE by the mean outcome variable)
+summary(model)$sigma/mean(train$total_UPDRS)
+```
+
+# Graduate-student part that I wanted to try out  
+
+## 5. Build a multiple linear regression model to predict total_UPDRS including an interaction term that you consider may be relevant based on the results obtained in (c)
+```{r}
+# Formula (subject and age as interaction term)
+interaction.model = lm(total_UPDRS ~.-motor_UPDRS-total_UPDRS+subject.*age, data = train)
+summary(interaction.model)
+# Results (improved a lil bit)
+summary(interaction.model)$r.sq 
+summary(interaction.model)$sigma
+summary(interaction.model)$sigma/mean(train$total_UPDRS)
+```
+
+## 6. Build a regression model which includes non-linear transformations of predictors
+```{r}
+# Formula (includes non-linear transformations of predictors.)
+transformation.model = lm(total_UPDRS ~.-motor_UPDRS-total_UPDRS+subject.*age+I(age^2)+I(subject.^2)+I(subject.*age^2), data = train)
+# Results (better)
+summary(transformation.model)
+summary(transformation.model)$r.sq 
+summary(transformation.model)$sigma
+summary(transformation.model)$sigma/mean(train$total_UPDRS)
+```
+
+## 7. Provide diagnostic plots for all the models built and comment on whether the models are appropriate based on what these plots show
+```{r}
+# Checking whether a model is a better fit 
+# H0: The two models fit the data equally well
+# H1: The full model is superior
+anova(model,transformation.model)
+
+# Diagnostic plots
+plot(model)
+# Using interaction term
+plot(interaction.model)
+# Using non-linear transformations
+plot(transformation.model)
+```
+

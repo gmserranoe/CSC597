@@ -1,0 +1,157 @@
+---
+title: "Assignment 2"
+author: "Gabriela Serrano Echenagucia"
+date: "2022 February 15"
+output: html_notebook
+---
+&nbsp;
+<center> <h1><b>Logistic Regression</b></h1> </center>
+
+```{r}
+# Load the dataset "breast-cancer-wisconsin.data"
+BC = read.csv("~/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Univ Miami/6th Semester - SPRING 2022/CSC 597/Assignments/Datasets/Classification/breast-cancer-wisconsin.data")
+
+# Assign names ot the columns
+colnames(BC) <- c("sample.num","clump.thickness","uniformity.size","uniformity.shape","marginal.adh","single.size","nuclei","chromatin","nucleoli","mitoses","tumor")
+
+# Missing values are represented with '?' char. So, replace with NA
+BC[BC == '?'] <- NA
+
+# Omit missing values
+BC = na.omit(BC)
+
+# For some reason R was reading column 7 as class: "char". So, change everything to numeric
+BC = as.data.frame(apply(BC, 2, as.numeric))
+
+# Convert 2 and 4 to 0 and 1, respectively
+# 2 = 0 = benign
+BC$tumor[BC$tumor=="2"] <- 0 
+# 4 = 1 = malign
+BC$tumor[BC$tumor=="4"] <- 1 
+
+# Convert tumor (classification variable) to a factor
+BC$tumor <- as.factor(BC$tumor)
+
+# We make sure that this is true: (0 = 0 = benign) and (1 = 1 = malign), for the predictions part
+contrasts(BC$tumor)
+
+#View(BC)
+```
+
+## 1. Use the appropriate functions to obtain descriptive information about the variables included in the dataset (paste or include a screenshot with the resulting information)
+
+```{r}
+# Displays names of the variables
+names(BC) 
+# Displays dimension of the dataframe
+dim(BC) 
+# Descriptive information about the variables included in the dataset
+summary(BC)
+```
+
+## 2. Calculate the correlation between the different attributes (include the figure produced by R in your answer)
+
+```{r}
+# Correlation (without non-numeric column)
+correlation = cor(BC[,-11])
+correlation
+```
+
+```{r}
+# Create figure
+pdf("Correlation-Figure2.pdf")
+pairs(correlation)
+dev.off()
+```
+
+## 3. Divide the input dataset into training and testing
+
+### a. Split the datasets using 80% for training and 20% for testing
+```{r}
+# Split
+dt = sort(sample(nrow(BC), nrow(BC)*.8))
+train = BC[dt,] # 545 obs out of 682 (or 80 %)
+test = BC[-dt,] # 137 obs out of 682 (or 20 %)
+
+# Training Set
+train
+# Testing Set
+test
+```
+
+### b. How many examples will be used for training and how many for testing?
+For training 545 examples out of 682 and for testing 137 examples out of 682
+
+## 4. Build a logistic regression model including all the input variables
+```{r}
+# Set seed to replicate results
+set.seed(1) 
+
+# Logistic Regression
+glm.model = glm(tumor ~., data = train, family = binomial)
+summary(glm.model)
+```
+
+### a. How does the model perform? Provide the confusion matrix and the test error
+Using Logistic Regression, the model performs very well. By computing the fraction for which the prediction was correct, we get a 0.9562044 which means around a 96% of accuracy in the prediction (and 4% of error).
+```{r}
+# Prediction
+# Predict on test set (based on logistic model made with train set)
+glm.pred = predict(glm.model, test, type = "response")
+
+# Initialize vector with 137 elements
+glm.probs = rep("0", 137)
+glm.probs[glm.pred >0.5] = "1"
+
+# Confusion matrix
+table(glm.probs, test$tumor)
+
+# Compute the fraction for which the prediction was correct
+mean(glm.probs==test$tumor)
+
+# Compute test error
+mean(glm.probs!=test$tumor)
+```
+
+### b. Which predictors are statistically significant?
+Bare Nuclei (nuclei) and Clump Thickness (clump.thickness) seem like the predictors that have a greater (most significant) impact in the prediction because they have the lowest p-values. P-values indicate if the coefficients from the independent variables are significantly different from zero. They are able to tell us if these ind. variables have weight in the mathematical relationship with the dependent variable. 
+
+In this problem, nuclei and clump.thickness seem to indicate a relationship with the type of tumor
+
+## 6. Build an LDA model including all the input variables
+```{r}
+# Linear Discriminant Analysis
+library(MASS)
+lda.model = lda(tumor~., data = train)
+lda.model
+```
+
+### a. How does the model perform? Provide the confusion matrix and the test error
+Using the LDA, we can see that the model performs very well. By computing the fraction for which the prediction was correct, we get a 0.9562044 which means around a 96% of accuracy in the prediction (and 4% of error).
+```{r}
+# Prediction
+# Predict on test set (based on linear discriminant analysis made with train set)
+lda.pred = predict(lda.model, test)
+names(lda.pred)
+
+# Calculate performance metrics
+lda.class=lda.pred$class
+
+# Confusion matrix
+table(lda.class, test$tumor)
+
+# Compute the fraction for which the prediction was correct
+mean(lda.class==test$tumor)
+
+# Compute test error
+mean(lda.class!=test$tumor)
+```
+
+### b. Which predictors have more weight on the class?
+Bare Nuclei (nuclei) and Clump Thickness (clump.thickness) seem like they are the predictors to have more weight on the class because they have highest coefficients. The coefficients describe the mathematical relationship between each independent variable and the dependent variable.
+
+### c. Plot the linear discriminants
+```{r}
+# Linear discriminants
+plot(lda.model)
+```

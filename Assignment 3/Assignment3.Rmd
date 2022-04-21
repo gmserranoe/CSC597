@@ -1,0 +1,102 @@
+---
+title: "Assignment 3"
+author: "Gabriela Serrano Echenagucia"
+date: "2022 February 27"
+output: html_notebook
+---
+&nbsp;
+<center> <h1><b>Cross Validation</b></h1> </center>
+
+```{r}
+# Load the dataset "parkinsons_updrs"
+Parkinsons = read.csv("~/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Univ Miami/6th Semester - SPRING 2022/CSC 597/Assignments/Datasets/Regression/parkinsons_updrs.data")
+
+summary(Parkinsons)
+```
+
+## 2. Use Leave-One-Out Cross-Validation (LOOCV) to test the models
+
+### a. How does the models perform?
+(MLR = multiple linear regression)          
+Overall, the models' performance is not great. From the first MLR to the MLR with interaction terms (subject and age) we can see a slight improvement in performance (86 to 83, respectively). By using non-linear transformations (subject and age) we can achieve the smallest error (almost 72). However, these errors are still very high. So we may conclude that a linear regression might not be the most suitable model for the Parkinsons dataset
+```{r}
+# To replicate results
+set.seed(35)
+
+library(boot)
+
+# Multiple Linear Regression
+glm.fit = glm(total_UPDRS~.-motor_UPDRS, data=Parkinsons)
+summary(glm.fit)
+
+# Multiple Linear Regression with interaction term
+glm.fit.interaction = glm(total_UPDRS ~.-motor_UPDRS+subject.*age, data=Parkinsons)
+summary(glm.fit.interaction)
+
+# Multiple Linear Regression with non-linear transformations
+glm.fit.transformation = glm(total_UPDRS~.-motor_UPDRS+subject.*age+I(age^2)+I(subject.^2)+I(subject.*age^2), data=Parkinsons)
+summary(glm.fit.transformation)
+
+# Leave-One-Out Cross-Validation (LOOCV)
+cv.err1 = cv.glm(Parkinsons, glm.fit)
+cv.err2 = cv.glm(Parkinsons, glm.fit.interaction)
+cv.err3 = cv.glm(Parkinsons, glm.fit.transformation)
+
+# Cross-validation results. 1st (raw) & 2nd (adjusted estimate, compensates bias)
+
+  # Regular
+  cv.err1$delta
+  # With interaction term
+  cv.err2$delta
+  # With non-linear transformations
+  cv.err3$delta
+
+# Trying out another library for LOOCV
+library(caret)
+train.control <- trainControl(method = "LOOCV")
+reg.model <- train(total_UPDRS~.-motor_UPDRS, data=Parkinsons, method = "lm", trControl = train.control)
+print(reg.model)
+```
+
+## 3. Use 10-fold cross-validation to test the models
+
+### a. How does the model perform?
+(MLR = multiple linear regression)            
+Overall, the models' performance is not great either. We got very similar results as LOOCV, but quicker computationally. From the first MLR to the MLR with interaction terms (subject and age) we can see a slight improvement in performance (86 to 83, respectively). By using non-linear transformations (subject and age) we can achieve the smallest error (almost 72). However, these errors are still very high. So again, we may conclude that a linear regression might not be the most suitable model for the Parkinsons dataset
+```{r}
+# To replicate results
+set.seed(17)
+
+# 10-fold CV
+cv.error.10.1 = rep(0,10)
+for (i in 1:10){
+  glm.fit.K = glm(total_UPDRS~.-motor_UPDRS, data=Parkinsons)
+  cv.error.10.1[i] = cv.glm(Parkinsons, glm.fit.K, K=10)$delta[1]
+}
+
+cv.error.10.2 = rep(0,10)
+for (i in 1:10){
+  glm.fit.interaction.K = glm(total_UPDRS ~.-motor_UPDRS+subject.*age, data=Parkinsons)
+  cv.error.10.2[i] = cv.glm(Parkinsons, glm.fit.interaction.K, K=10)$delta[1]
+}
+
+cv.error.10.3 = rep(0,10)
+for (i in 1:10){
+  glm.fit.transformation.K = glm(total_UPDRS~.-motor_UPDRS+subject.*age+I(age^2)+I(subject.^2)+I(subject.*age^2), data=Parkinsons)
+  cv.error.10.3[i] = cv.glm(Parkinsons, glm.fit.transformation.K, K=10)$delta[1]
+}
+
+# Cross-validation results
+
+  # Regular
+  cv.error.10.1 
+  which.min(cv.error.10.1)
+  # With interaction term
+  cv.error.10.2 
+  which.min(cv.error.10.2)
+  # With non-linear transformations
+  cv.error.10.3 
+  which.min(cv.error.10.3)
+```
+
+

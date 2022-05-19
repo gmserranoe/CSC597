@@ -1,0 +1,159 @@
+---
+title: "Assignment 6"
+author: "Gabriela Serrano Echenagucia"
+date: "2022 April 10"
+output: html_notebook
+---
+&nbsp;
+<center> <h1><b>Classification Problem</b></h1> </center>
+
+```{r}
+# Load the dataset "breast-cancer-wisconsin.data"
+BC = read.csv("~/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Univ Miami/6th Semester - SPRING 2022/CSC 597/Assignments/Datasets/Classification/breast-cancer-wisconsin.data")
+
+# Assign names ot the columns
+colnames(BC) <- c("sample.num","clump.thickness","uniformity.size","uniformity.shape","marginal.adh","single.size","nuclei","chromatin","nucleoli","mitoses","tumor")
+
+# Missing values are represented with '?' char. So, replace with NA
+BC[BC == '?'] <- NA
+
+# Omit missing values
+BC = na.omit(BC)
+
+# For some reason R was reading column 7 as class: "char". So, change everything to numeric
+BC = as.data.frame(apply(BC, 2, as.numeric))
+
+# Convert 2 and 4 to 0 and 1, respectively
+# 2 = 0 = benign
+BC$tumor[BC$tumor=="2"] <- 0 
+# 4 = 1 = malign
+BC$tumor[BC$tumor=="4"] <- 1 
+
+# Convert tumor (classification variable) to a factor
+BC$tumor <- as.factor(BC$tumor)
+
+# We make sure that this is true: (0 = 0 = benign) and (1 = 1 = malign), for the predictions part
+contrasts(BC$tumor)
+
+# View(BC)
+```
+
+```{r}
+# Set seed
+set.seed(44)
+
+# Import libraries
+library(e1071)
+library(caret)
+library(ROCR)
+```
+
+## 1. Split the datasets using 80% for training and 20% for testing
+```{r}
+# Split
+dt = sort(sample(nrow(BC), nrow(BC)*.8))
+train = BC[dt,] # 545 obs out of 682 (or 80 %)
+test = BC[-dt,] # 137 obs out of 682 (or 20 %)
+
+# Training Set
+train
+# Testing Set
+test
+```
+
+## 2. Create an SVM model using a radial basis kernel
+```{r}
+svm.fitA = svm(tumor~., data=train, kernel="radial", gamma=1, cost=1)
+
+?plot.svm
+#plot(svm.fitA, train, clump.thickness~uniformity.size)
+
+summary(svm.fitA)
+```
+
+### a. How does the model perform?
+The SVM model created using a radial basis kernel (with gamma=1 and cost=1), performs quite good. If we look at the performance metrics and the main diagonal in the confusion matrix we can see that the number of correct predictions is greater than the number of mispredictions. There is indication of a high prediction accuracy with 126 correct predictions out of 137.
+```{r}
+# Testing the model on the test set (model A)
+ypredA = predict(svm.fitA, test)
+table(prediction=ypredA, reference=test$tumor)
+```
+
+### b. Tune the model using cross-validation. Print out the information about the best model
+```{r}
+# Tune
+tune.out=tune(svm, tumor~., data=train, kernel="radial",
+              ranges=list(cost=c(0.1,1,10,100,1000),gamma=c(0.5,1,2,3,4) ))
+summary(tune.out)
+
+# Best model
+summary(tune.out$best.model)
+
+# Model B
+svm.fitB = svm(tumor~., data=train, kernel="radial", gamma=0.5, cost=10)
+
+#plot(svm.fitB, train, clump.thickness~uniformity.size)
+
+summary(svm.fitB)
+```
+
+### c. Compare the models in “a” and “b”
+By tuning Model A (SVM, radial kernel with gamma=1 and cost=1), we were able to slightly improve the results. Again, by looking at the main diagonal in the confusion matrix we can see good results. Model B (tuned) was able to make 129 correct predictions out of 137, by using optimal parameters (gamma=0.5 and cost=10). The performance metrics we got from running the confusionMatrix function indicate an accuracy of approximately 92% for Model A and around 94% for Model B (Model A, but tuned).
+```{r}
+# Testing the model on the test set (model B)
+  
+  # Model A
+  confusionMatrix(ypredA, test$tumor)
+
+  # Model B
+  ypredB = predict(svm.fitB, test)
+  confusionMatrix(ypredB, test$tumor)
+```
+
+## 3. Compare the performance of the different models built.
+Overall, Model B does a better job predicting the class variable "tumor" (benign/malign) for the Wisconsin breast cancer dataset. We can visualize these results by plotting the ROC curves. For Model A, we can see the trained data line in black and the test data curve in red. For Model B, we can see the trained data line in black and the test data curve in blue. By comparing the two, we can see that the blue line is slightly closer to the top-left corner to the black line than the red line, indicating a better performance.
+
+### a. Plot ROC curves for the SVM model
+```{r}
+# ROC function
+rocplot = function(pred, truth, ...){
+  predob = prediction(pred, truth)
+  perf = performance(predob,"fpr", "tpr")
+  plot(perf,...)
+  }
+```
+
+&nbsp;
+
+#### Model A
+```{r}
+# Model A
+svmfit.A = svm(tumor~., data=train, kernel="radial", gamma=1, cost=1, decision.values=T)
+fitted.A = attributes(predict(svmfit.A, train, decision.values=T))$decision.values
+
+# Plot ROC curve
+rocplot(fitted.A, train$tumor, main="Training Data (Model A)", xlab="False positive rate", ylab="True positive rate")
+
+# Performance on test data
+fitted.tA = attributes(predict(svmfit.A, test, decision.values=T))$decision.values
+rocplot(fitted.tA, test$tumor, main="Test Data (Model A)", add=T, col="red")
+```
+
+&nbsp;
+
+#### Model B 
+```{r}
+# Model B
+svmfit.B = svm(tumor~., data=train, kernel="radial", gamma=0.5, cost=10, decision.values=T)
+fitted.B = attributes(predict(svmfit.B, train, decision.values=T))$decision.values
+
+# Plot ROC curve
+rocplot(fitted.B, train$tumor, main="Training Data (Model B)", xlab="False positive rate", ylab="True positive rate")
+
+# Performance on test data
+fitted.tB = attributes(predict(svmfit.B, test, decision.values=T))$decision.values
+rocplot(fitted.tB, test$tumor, main="Test Data (Model B)", add=T,col="blue")
+```
+
+
+

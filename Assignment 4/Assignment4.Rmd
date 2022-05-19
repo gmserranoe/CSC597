@@ -1,0 +1,131 @@
+---
+title: "Assignment 4"
+author: "Gabriela Serrano Echenagucia"
+date: "2022 March 26"
+output: html_notebook
+---
+&nbsp;
+<center> <h1><b>Feature selection and dimension reduction using Lasso and PLS</b></h1> </center>
+
+```{r}
+# Load the dataset "parkinsons_updrs"
+Parkinsons = read.csv("~/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Univ Miami/6th Semester - SPRING 2022/CSC 597/Assignments/Datasets/Regression/parkinsons_updrs.data")
+
+# Set seed
+set.seed(82)
+```
+
+## 1. Divide the input dataset into training and testing (80:20)
+```{r}
+dt = sort(sample(nrow(Parkinsons), nrow(Parkinsons)*.8))
+train = Parkinsons[dt,] # 4700 obs out of 5875 (or 80 %)
+test = Parkinsons[-dt,] # 1175 obs out of 5875 (or 20 %)
+
+# Training
+train
+# Testing
+test
+```
+
+```{r}
+# Load libraries for shrinkage methods
+library(glmnet)
+library(pls)
+```
+
+## 2. Apply Lasso
+```{r}
+# Prepare predictors and response variable (train, test, whole dataset)
+
+  # Response variable as a vector 
+  y <- train$total_UPDRS
+  # Set of predictor variables to be of the class data.matrix 
+  x <- model.matrix(total_UPDRS~.-motor_UPDRS, train)[,-1]
+  
+  # Repeat: test
+  test.y = test$total_UPDRS
+  test.x <- model.matrix(total_UPDRS~.-motor_UPDRS, test)[,-1]
+  
+  # Repeat: whole dataset
+  whole.y <- Parkinsons$total_UPDRS
+  whole.x <- model.matrix(total_UPDRS~.-motor_UPDRS, Parkinsons)[,-1]
+```
+
+### a. Optimize the parameter lambda using CV
+```{r}
+# Let alpha = 1
+
+# Perform k-fold cross-validation to find optimal lambda value
+lasso.mod <- cv.glmnet(x, y, alpha = 1)
+
+# Find optimal lambda value that minimizes test MSE
+best.lambda <- lasso.mod$lambda.min
+best.lambda
+
+# Plot
+plot(lasso.mod)
+```
+
+### b. Once lambda.min is obtained calculate the MSE on the test set
+We can minimize the test MSE to `r round(mean((lasso.pred - test.y)^2), 2)`
+```{r}
+# Predict  with best lambda
+lasso.pred <- predict(lasso.mod, s=best.lambda , newx=test.x)
+
+# Calculate MSE
+mean((lasso.pred - test.y)^2)
+```
+&nbsp;
+
+### more: coefficients
+Using best lambda `r round(lasso.mod$lambda.min, 4)` (obtained by CV)
+```{r}
+# Coefficients
+out <- glmnet(whole.x, whole.y, alpha=1)
+lasso.coef <- predict(out, type="coefficients", s=best.lambda)[2:20,]
+lasso.coef
+```
+### more: finding R-Squared
+The R-squared turns out to be `r rsq`. That is, the best model was able to explain `r round((rsq)*100, 2)`% of the variation in the response values of the training data.
+```{r}
+# Find SST and SSE
+sst <- sum((test.y - mean(test.y))^2)
+sse <- sum((lasso.pred - test.y)^2)
+
+# find R-Squared
+rsq <- 1 - (sse/sst)
+rsq
+```
+
+## 3. Apply PLS
+<b>VALIDATION: RMSEP</b> - test RMSE calculated by the CV  
+<b>TRAINING: % variance explained</b> - percentage of the variance in the response variable explained by the PLS components
+
+### a. Optimize M using CV
+```{r}
+# Fit model
+pls.fit <- plsr(total_UPDRS~.-motor_UPDRS, data=train, scale=T, validation="CV")
+summary(pls.fit)
+
+# Plots
+validationplot(pls.fit)
+validationplot(pls.fit, val.type="MSEP")
+validationplot(pls.fit, val.type="R2")
+```
+
+### b. Calculate the MSE on the test set
+Using optimal number of components (M=7), the MSE turns out to be `r round(mean((pls.pred - test.y)^2), 2)`
+```{r}
+# Lowest CV error with M=7
+pls.pred <- predict(pls.fit, test.x, ncomp=7)
+
+# Calculate MSE
+mean((pls.pred - test.y)^2)
+```
+
+```{r}
+# Refit using all the data
+model <- plsr(total_UPDRS~.-motor_UPDRS, data=Parkinsons, scale=TRUE, ncomp=7)
+summary(model)
+```
+

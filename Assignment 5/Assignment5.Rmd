@@ -1,0 +1,153 @@
+---
+title: "Assignment 5"
+author: "Gabriela Serrano Echenagucia"
+date: "2022 April 3"
+output: html_notebook
+---
+&nbsp;
+<center> <h1><b>Tree-based and Ensemble Methods</b></h1> </center>
+
+```{r}
+# Load the dataset "parkinsons_updrs"
+Parkinsons = read.csv("~/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Univ Miami/6th Semester - SPRING 2022/CSC 597/Assignments/Datasets/Regression/parkinsons_updrs.data")
+```
+
+```{r}
+# Load the dataset "breast-cancer-wisconsin.data"
+BC = read.csv("~/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Univ Miami/6th Semester - SPRING 2022/CSC 597/Assignments/Datasets/Classification/breast-cancer-wisconsin.data")
+
+# Assign names ot the columns
+colnames(BC) <- c("sample.num","clump.thickness","uniformity.size","uniformity.shape","marginal.adh","single.size","nuclei","chromatin","nucleoli","mitoses","tumor")
+
+# Missing values are represented with '?' char. So, replace with NA
+BC[BC == '?'] <- NA
+
+# Omit missing values
+BC = na.omit(BC)
+
+# For some reason R was reading column 7 as class: "char". So, change everything to numeric
+BC = as.data.frame(apply(BC, 2, as.numeric))
+
+# Convert 2 and 4 to 0 and 1, respectively
+# 2 = 0 = benign
+BC$tumor[BC$tumor=="2"] <- 0 
+# 4 = 1 = malign
+BC$tumor[BC$tumor=="4"] <- 1 
+
+# Convert tumor (classification variable) to a factor
+BC$tumor <- as.factor(BC$tumor)
+
+# We make sure that this is true: (0 = 0 = benign) and (1 = 1 = malign), for the predictions part
+contrasts(BC$tumor)
+```
+```{r}
+# Set seed
+set.seed(42)
+```
+
+
+## 0. Divide the input datasets into training and testing (80:20)
+```{r}
+# Parkinsons
+dt1 = sort(sample(nrow(Parkinsons), nrow(Parkinsons)*.8))
+P.train = Parkinsons[dt1,] # 4700 obs out of 5875 (or 80 %)
+P.test = Parkinsons[-dt1,] # 1175 obs out of 5875 (or 20 %)
+
+  # Training
+  P.train
+  # Testing
+  P.test
+
+# Breast Cancer
+dt2 = sort(sample(nrow(BC), nrow(BC)*.8))
+BC.train = BC[dt2,] # 545 obs out of 682 (or 80 %)
+BC.test = BC[-dt2,] # 137 obs out of 682 (or 20 %)
+
+  # Training Set
+  BC.train
+  # Testing Set
+  BC.test
+```
+
+## 1. Regression problem: build regression models to predict total_UPDRS (reminder: do not include motor_UPDRS as input to the model) and measure their performance utilizing the test set
+
+```{r}
+# Libraries
+library(randomForest)
+library(gbm)
+library(tree)
+
+# Test var for prediction
+test.pk = P.test$total_UPDRS
+```
+
+
+### b. Build a regression model using random forest
+<b>How does the model perform?</b> A Random Forest model was built for the Parkinsons dataset (regression). We calculated the MSE (`r round(mean((rf.pred - test.pk)^2), 2)`) and found the $R^{2}$, which resulted in `r round(rf.rsq, 4)`. This means that the model explains `r round(rf.rsq, 4)*100`% percent of the variability of the response data around its mean, indicating a good model for prediction
+```{r}
+# Model
+rf.fit = randomForest(total_UPDRS~.-motor_UPDRS, data=P.train, type="regression", importance=TRUE)
+
+# %IncMSE: mean decrease of accuracy in predictions on the OOB samples when a given variable is excluded from the model
+# IncNodeImpurity: total decrease in node impurity that results from splits over that variable, averaged over all trees (RSS in regr. vs. deviance in class)
+importance(rf.fit)
+
+# Performance
+rf.pred = predict(rf.fit, newdata=P.test)
+
+  # MSE
+  mean((rf.pred - test.pk)^2)
+  
+  # Find SST and SSE
+  rf.sst = sum((test.pk - mean(test.pk))^2)
+  rf.sse = sum((rf.pred - test.pk)^2)
+
+  # find R-Squared
+  rf.rsq = 1 - (rf.sse/rf.sst)
+  rf.rsq
+```
+
+
+### c. Build a regression model using boosting
+<b>How does the model perform?</b> A Boosting  model was built for the Parkinsons dataset (regression). We calculated the MSE (`r round(mean((boost.pred - test.pk)^2), 2)`) and found the $R^{2}$, which resulted in `r round(b.rsq, 4)`. This means that the model explains `r round(b.rsq, 4)*100`% of the variability of the response data around its mean, indicating a good model for prediction
+```{r}
+# Model
+boost.fit = gbm(total_UPDRS~.-motor_UPDRS, data=P.train, distribution="gaussian",
+                 n.trees=5000)
+
+summary(boost.fit)
+
+# Performance
+boost.pred = predict(boost.fit, newdata=P.test, n.trees=5000)
+
+  # MSE
+  mean((boost.pred - test.pk)^2)
+  
+  # Find SST and SSE
+  b.sst = sum((test.pk - mean(test.pk))^2)
+  b.sse = sum((boost.pred - test.pk)^2)
+
+  # find R-Squared
+  b.rsq = 1 - (b.sse/b.sst)
+  b.rsq
+```
+
+
+## 2. Classification problem: build classification models to predict the class variable and measure their performance utilizing the test set
+
+### a. Build a classification model using decision trees
+<b>How does the model perform?</b> A Decision Tree  model was built for the Breast Cancer dataset (classification). The performance was tested using a confusion matrix, which indicated: Accuracy (0.9562), Sensitivity (0.9885) and Specificity (0.9000). Looking at the confusion matrix we are able to see quite good results, the main diagonal indicates a high prediction accuracy with 131 correct predictions out of 137.
+```{r}
+# Model
+tree.fit = tree(tumor~., data=BC.train)
+plot(tree.fit)
+text(tree.fit, pretty=0, cex=0.5)
+
+# Prediction
+tree.pred = predict(tree.fit, newdata=BC.test, type="class")
+
+# Confusion Matrix
+confusionMatrix(data=tree.pred, reference = BC.test$tumor)
+```
+
+
